@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{title}}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="http://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet" media="screen">
+    <style type="text/css">
+      .container {
+        max-width: 500px;
+        padding-top: 50px;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h3><p>{{message}}</p></h3>
+      <div class="row">
+        <div style="text-align:center;">
+          <button type="button" class="btn green" id="ftp">ftp button</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+
+<script src="../static/js/jquery-3.6.1.js"></script>
+<script>
+  $(document).ready(function () {
+    $("#ftp").on("click", function () {
+      console.log("ftp button click");
+
+      var params = {
+        name: "test"
+      }
+
+      $.ajax({
+        type : "GET",
+        url : "/ftp",
+        data : params,
+        success : function(res) {
+          console.log("res: ", res);
+        },
+        error : function(XMLHttpRequest, textStatus, errorThrown) {
+          console.log("XMLHttpRequest: ", XMLHttpRequest);
+          console.log("textStatus: ", textStatus);
+          console.log("errorThrown: ", errorThrown);
+        }
+      });
+
+    });
+  });
+</script>
