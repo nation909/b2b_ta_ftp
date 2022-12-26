@@ -188,9 +188,11 @@ def mecab_convert():
         run_command("sh " + CURR_DIR + "/script/mecab_clean_install.sh " + MECAB_PATH)
     except Exception as e:
         logging.error("Mecab CSV Convert Error: {}".format(e))
+        return {"msg": "mecab convert failed"}
 
     end_time = time.time()
     logging.info("Mecab Convert Process Time: {}".format(end_time - start_time))
+    return {"msg": "mecab convert success"}
 
 
 @app.route('/ping', methods=['GET', 'POST'])
