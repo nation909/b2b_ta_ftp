@@ -49,7 +49,7 @@ def custom_dic_load():
     curs = conn.cursor()
     sql = "select morphem, pos, synonym, costs from {} where use_yn = 'Y'".format(CUSTOM_DIC)
     curs.execute(sql)
-    custom_dic = {i[0]: [i[1], i[2]] for i in curs.fetchall()}
+    custom_dic = {i[0]: [i[1], i[2], i[3]] for i in curs.fetchall()}
     conn.close()
     return custom_dic
 
@@ -57,11 +57,15 @@ def custom_dic_load():
 def ner_dic_load():
     conn = pg2.connect(host=HOST, user=ID, password=PW, database=DB, port=PORT)
     curs = conn.cursor()
-    ner_sql = "select keyword, ne, pos from {} where use_yn = 'Y'".format(NER_DIC)
-    curs.execute(ner_sql)
-    ner_dic = {i[0]: [i[1], i[2]] for i in curs.fetchall()}
+    sql = "select keyword, ne, pos from {} where ne = '인명' and use_yn = 'Y'".format(NER_DIC)
+    curs.execute(sql)
+    person_dic = {i[0]: [i[1], i[2]] for i in curs.fetchall()}
+
+    sql = "select keyword, ne, pos from {} where ne = '지명' and use_yn = 'Y'".format(NER_DIC)
+    curs.execute(sql)
+    place_dic = {i[0]: [i[1], i[2]] for i in curs.fetchall()}
     conn.close()
-    return ner_dic
+    return person_dic, place_dic
 
 
 def get_jongsung_TF(text):
@@ -103,7 +107,7 @@ def run_command(command):
 
 
 def mecab_rebuild():
-    result = run_command("sh " + CURR_DIR + "/script/mecab_clean_install.sh " + MECAB_PATH)
+    result = run_command("sh " + CURR_DIR + "/script/mecab_custom_dic.sh " + MECAB_PATH)
     if result[0] != 1:
         logging.error(result[1] if len(result) >= 2 else "Fail to Mecab_Custom_Vocab_Rebuild, Command was Wrong")
         return 0
@@ -124,16 +128,16 @@ def mecab_convert():
         # bak_dir = './csv/bak/
 
         # dev
-        csv_dir = MECAB_PATH
+        csv_dir = '/home/aiccta/project/mecab/dic/user-dic/'
         today = datetime.datetime.today().strftime('%Y%m%d')
-        bak_dir = MECAB_PATH + '/user-dic/bak/'
+        bak_dir = '/home/aiccta/project/mecab/dic/user-dic/bak/'
 
         # 1. user-dic CSV 백업 (해당날짜)
         if not os.path.exists(bak_dir + today):
             os.makedirs(bak_dir + today)
             logging.info("Create Backup Directory: {}".format(bak_dir + today))
 
-        csv_list = [file for file in os.listdir(csv_dir) if file.startswith('user-') and file.endswith('.csv')]
+        csv_list = [file for file in os.listdir(csv_dir) if file.endswith('.csv')]
         logging.info("Backup CSV List: {}".format(csv_list))
         for csv in csv_list:
             shutil.copy(csv_dir + csv, bak_dir + today)
@@ -142,8 +146,8 @@ def mecab_convert():
         custom_dic = custom_dic_load()
         logging.info("Custom Dic Data Load Length: {}".format(len(custom_dic)))
 
-        # 2-2. 사용자사전 CSV Write (user-custom_dic.csv)
-        custom_dic_file = csv_dir + 'user-custom_dic.csv'
+        # 2-2. 사용자사전 CSV Write (custom_dic.csv)
+        custom_dic_file = csv_dir + 'custom_dic.csv'
         if os.path.exists(custom_dic_file):
             os.remove(custom_dic_file)
 
@@ -154,28 +158,40 @@ def mecab_convert():
                 for i in synonym:
                     if keyword == i:
                         check = True
-                    f.write("{},1786,3546,0,{},*,{},{},*,*,*,*,*\n".format(i, value_list[0],
+                    f.write("{},,,{},{},*,{},{},*,*,*,*,*\n".format(i, value_list[2], value_list[0],
                                                                     get_jongsung_TF(keyword), keyword))
+
                 if check is False:  # 유의어와 키워드(대표어)가 다른 케이스만 있는 경우
-                    f.write("{},1786,3546,0,{},*,{},{},*,*,*,*,*\n".format(keyword, value_list[0],
+                    f.write("{},,,{},{},*,{},{},*,*,*,*,*\n".format(keyword, value_list[2], value_list[0],
                                                                     get_jongsung_TF(keyword), keyword))
 
         logging.info("Custom Dic CSV Write Success: {}".format(time.strftime('%H:%M:%S')))
 
         # 3-1. 개체명사전 DB Data Load
-        ner_dic = ner_dic_load()
-        logging.info("NER Dic Data Load Length: {}".format(len(ner_dic)))
+        person_dic, place_dic = ner_dic_load()
+        logging.info("NER Dic Data Load Person Length: {}, Place Length: {}".format(len(person_dic, len(place_dic))))
 
         # 3-2-1. 개체명사전 인명 CSV Write (person.csv)
-        ner_dic_file = csv_dir + 'user-ner.csv'
-        if os.path.exists(ner_dic_file):
-            os.remove(ner_dic_file)
+        person_dic_file = csv_dir + 'person.csv'
+        if os.path.exists(person_dic_file):
+            os.remove(person_dic_file)
 
-        with open(ner_dic_file, 'w', encoding='utf-8') as f:
-            for keyword, value_list in ner_dic.items():
-                f.write("{},1788,3550,0,{},{},{},{},*,*,*,*,*\n".format(keyword, value_list[1], value_list[0],
+        with open(person_dic_file, 'w', encoding='utf-8') as f:
+            for keyword, value_list in person_dic.items():
+                f.write("{},,,,{},{},{},{},*,*,*,*,*\n".format(keyword, value_list[1], value_list[0],
                                                                get_jongsung_TF(keyword), keyword))
-        logging.info("NER Dic CSV Write Success: {}".format(time.strftime('%H:%M:%S')))
+        logging.info("Person Dic CSV Write Success: {}".format(time.strftime('%H:%M:%S')))
+
+        # 3-2-2. 개체명사전 지명 CSV Write (place.csv)
+        place_dic_file = csv_dir + 'place.csv'
+        if os.path.exists(place_dic_file):
+            os.remove(place_dic_file)
+
+        with open(place_dic_file, 'w', encoding='utf-8') as f:
+            for keyword, value_list in place_dic.items():
+                f.write("{},,,,{},{},{},{},*,*,*,*,*\n".format(keyword, value_list[1], value_list[0],
+                                                               get_jongsung_TF(keyword), keyword))
+        logging.info("Place Dic CSV Write Success: {}".format(time.strftime('%H:%M:%S')))
 
         # 일주일전 백업파일 삭제
         before_week_day = (datetime.datetime.today() - datetime.timedelta(weeks=1)).strftime('%Y%m%d')
@@ -183,9 +199,8 @@ def mecab_convert():
             shutil.rmtree(bak_dir + before_week_day)
             logging.info("Remove Backup Directory: {}".format(bak_dir + before_week_day))
 
-        # Mecab clean && install
-        # _ = mecab_rebuild_post()
-        run_command("sh " + CURR_DIR + "/script/mecab_clean_install.sh " + MECAB_PATH)
+        _ = mecab_rebuild_post()
+
     except Exception as e:
         logging.error("Mecab CSV Convert Error: {}".format(e))
 
@@ -201,7 +216,7 @@ def ping():
 
 sched = BackgroundScheduler(daemon=True, timezone=pytz.timezone('Asia/Seoul'))
 sched.add_job(mecab_convert, 'cron', hour='3')  # 새벽 3시 Mecab Convert
-# sched.add_job(mecab_convert, 'interval', seconds=30)  # 30초마다 반복 Mecab Convert
+sched.add_job(mecab_convert, 'interval', seconds=30)  # 30초마다 반복 Mecab Convert
 sched.start()
 
 if __name__ == '__main__':
